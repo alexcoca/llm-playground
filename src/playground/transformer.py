@@ -10,6 +10,7 @@ from playground.inference_utils import (
     KVCache,
     Logits,
     create_cache_key_mask,
+    create_query_mask,
     extend_with_next_token,
     get_next_token_ids,
     increment_pos,
@@ -104,13 +105,17 @@ class Transformer(TransformerMixin, nn.Module):
         """Run a forward pass through the model and save
         the keys and values for all prompt tokens across
         all layers."""
-        max_step = max_new_tokens + prompt_len.max().item()
-        keys_allowed = create_cache_key_mask(prompt_len, Tmax=max_step)
+        max_prompt_len = prompt_len.max().item()
+        max_step = max_new_tokens + max_prompt_len
         layer_caches = []
         for i, block in enumerate(self.blocks):
             print(f"Running block {i}")
             res_stream, cache = block.forward_cached(
-                res_stream, None, cache_pos, keys_allowed
+                res_stream,
+                None,
+                cache_pos,
+                cache_key_mask=create_cache_key_mask(prompt_len, Tmax=max_step),
+                query_mask=create_query_mask(prompt_len, max_seq_len=max_prompt_len),
             )
             layer_caches.append(cache)
         res_stream = self.final_norm(res_stream)

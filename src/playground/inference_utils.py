@@ -90,6 +90,17 @@ def create_cache_key_mask(
     ).view(B, 1, 1, Tmax)
 
 
+def create_query_mask(
+    prompt_len: TensorType["B"],
+    max_seq_len: int,
+) -> TensorType["B", 1, "T", 1]:
+    """Mask padded rows during batched decoding."""
+    B = prompt_len.shape[0]
+    j = torch.arange(max_seq_len, device=prompt_len.device).expand(B, -1)
+
+    return (j < prompt_len[:, None]).view(B, 1, max_seq_len, 1)
+
+
 def init_output(
     inputs: TensorType["B", "Lin"],
     max_step: int,

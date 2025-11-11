@@ -80,6 +80,7 @@ class MultiHeadAttentionOptimised(nn.Module):
         kv_cache: KVCache,
         cache_pos: TensorType["B"],
         cache_key_mask: TensorType["B", 1, 1, "Tmax"] | None = None,
+        query_mask: TensorType["B", "Lq"] | None = None,
     ) -> TensorType["B", "Lq", "D_out"]:
 
         q, k, v = self.prepare_qkv(x_step)
@@ -102,10 +103,11 @@ class MultiHeadAttentionOptimised(nn.Module):
 
         if causal_mask is not None:
             attn_mask = causal_mask & cache_key_mask
+        if query_mask is not None:
+            attn_mask &= query_mask
         idx = cache_pos.reshape(B, 1, Lq, 1).expand(
             -1, self.num_heads, -1, self.head_dim
         )
-        # TODO: QUERY PADDING, FIX ATTENTION OVER CACHE
         kv_cache.keys.scatter_(dim=-2, index=idx, src=k)
         kv_cache.values.scatter_(dim=-2, index=idx, src=v)
         attn = F.scaled_dot_product_attention(
@@ -168,6 +170,7 @@ class TransformerBlock(nn.Module):
         kv_cache: KVCache | None,
         cache_pos: TensorType["B"],
         cache_key_mask: TensorType["B", 1, 1, "Tmax"] | None = None,
+        query_mask: TensorType["B", "Lq"] | None = None,
     ) -> tuple[TensorType["B", "Lq", "D"], KVCache]:
 
         cache_pos = cache_pos.to(device=res_stream.device, dtype=torch.long)

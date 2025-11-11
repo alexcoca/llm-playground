@@ -1,5 +1,3 @@
-from typing import TypeVar
-
 import torch
 from omegaconf import DictConfig
 from torch import nn as nn
@@ -10,21 +8,12 @@ from playground.inference_utils import KVCache
 from playground.transformer_utils import create_causal_padding_mask
 
 
-B = TypeVar("B")  # batch size
-D = TypeVar("D")  # model embedding dimension
-D_out = TypeVar("D_out")  # attention output dimension
-Dh = TypeVar("Dh")  # attention head dimension
-H = TypeVar("H")  # number of attention heads
-L = TypeVar("L")  # sequence length
-Lq = TypeVar("Lq")  # query sequence length
-Tmax = TypeVar("Tmax")  # max cache size
-
 QKVTuple = tuple[
-    TensorType[B, H, L, Dh],
-    TensorType[B, H, L, Dh],
-    TensorType[B, H, L, Dh],
+    TensorType["B", "H", "L", "Dh"],
+    TensorType["B", "H", "L", "Dh"],
+    TensorType["B", "H", "L", "Dh"],
 ]
-PadMask = TensorType[B, L]
+PadMask = TensorType["B", "L"]
 
 
 class FeedForwardNetwork(nn.Module):
@@ -37,7 +26,7 @@ class FeedForwardNetwork(nn.Module):
             nn.Linear(cfg.ff_hidden_size_ratio * cfg.embed_dim, cfg.embed_dim),
         )
 
-    def forward(self, input: TensorType[B, L, H]) -> TensorType[B, L, H]:
+    def forward(self, input: TensorType["B", "L", "H"]) -> TensorType["B", "L", "H"]:
         return self.layers(input)
 
 
@@ -63,9 +52,9 @@ class MultiHeadAttentionOptimised(nn.Module):
 
     def forward(
         self,
-        x: TensorType[B, L, D],
-        attention_mask: TensorType[B, L] | None = None,
-    ) -> TensorType[B, L, D_out]:
+        x: TensorType["B", "L", "D"],
+        attention_mask: TensorType["B", "L"] | None = None,
+    ) -> TensorType["B", "L", "D_out"]:
 
         q, k, v = self.prepare_qkv(x)
         if attention_mask is not None:
@@ -87,11 +76,11 @@ class MultiHeadAttentionOptimised(nn.Module):
 
     def forward_cached(
         self,
-        x_step: TensorType[B, Lq, D],
+        x_step: TensorType["B", "Lq", "D"],
         kv_cache: KVCache,
-        cache_pos: TensorType[B],
-        cache_keys_allowed: TensorType[B, 1, 1, Tmax] | None = None,
-    ) -> TensorType[B, Lq, D_out]:
+        cache_pos: TensorType["B"],
+        cache_keys_allowed: TensorType["B", 1, 1, "Tmax"] | None = None,
+    ) -> TensorType["B", "Lq", "D_out"]:
 
         q, k, v = self.prepare_qkv(x_step)
         B, n_head, Lq, head_dim = q.shape
@@ -130,7 +119,7 @@ class MultiHeadAttentionOptimised(nn.Module):
 
         return self.W_out(context)
 
-    def prepare_qkv(self, x: TensorType[B, L, D]) -> QKVTuple:
+    def prepare_qkv(self, x: TensorType["B", "L", "D"]) -> QKVTuple:
         B, L, _ = x.shape
         q, k, v = self.W_qkv(x).chunk(3, dim=-1)
         q = q.reshape(B, L, self.num_heads, self.head_dim).transpose(1, 2)
@@ -159,9 +148,9 @@ class TransformerBlock(nn.Module):
 
     def forward(
         self,
-        res_stream: TensorType[B, L, D],
+        res_stream: TensorType["B", "L", "D"],
         attention_mask: PadMask | None = None,
-    ) -> TensorType[B, L, D]:
+    ) -> TensorType["B", "L", "D"]:
 
         attention_input = self.layer_norm_pre_att(res_stream)
         attention_output = self.post_attn_dropout(
@@ -175,11 +164,11 @@ class TransformerBlock(nn.Module):
 
     def forward_cached(
         self,
-        res_stream: TensorType[B, Lq, D],
+        res_stream: TensorType["B", "Lq", "D"],
         kv_cache: KVCache | None,
-        cache_pos: TensorType[B],
-        cache_keys_allowed: TensorType[B, 1, 1, Tmax] | None = None,
-    ) -> tuple[TensorType[B, Lq, D], KVCache]:
+        cache_pos: TensorType["B"],
+        cache_keys_allowed: TensorType["B", 1, 1, "Tmax"] | None = None,
+    ) -> tuple[TensorType["B", "Lq", "D"], KVCache]:
 
         cache_pos = cache_pos.to(device=res_stream.device, dtype=torch.long)
 
@@ -212,7 +201,7 @@ class TransformerBlock(nn.Module):
         return res_stream + ffn_output, kv_cache
 
     def init_cache(
-        self, res_stream: TensorType[B, Lq, D], *, cache_size: int
+        self, res_stream: TensorType["B", "Lq", "D"], *, cache_size: int
     ) -> KVCache:
         B = res_stream.shape[0]
         H = self.attention.num_heads

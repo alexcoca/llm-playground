@@ -1,5 +1,4 @@
 import logging
-from typing import TypeVar
 
 from omegaconf import DictConfig
 import torch
@@ -22,15 +21,6 @@ from playground.transformer_mixin import TransformerMixin
 from playground.transformer_utils import create_pad_mask
 
 logger = logging.getLogger(__name__)
-
-B = TypeVar("B")  # batch size
-D = TypeVar("D")  # model embedding dimension
-H = TypeVar("H")  # number of attention heads
-L = TypeVar("L")  # sequence length
-Lin = TypeVar("Lin")  # input sequence length
-Lout = TypeVar("Lout")  # output sequence length
-Tmax = TypeVar("Tmax")  # max cache size
-V = TypeVar("V")  # vocabulary size
 
 
 class Transformer(TransformerMixin, nn.Module):
@@ -62,9 +52,9 @@ class Transformer(TransformerMixin, nn.Module):
 
     def forward(
         self,
-        inputs: TensorType[B, L],
-        attention_mask: TensorType[B, L] | None = None,
-    ) -> TensorType[B, L, V]:
+        inputs: TensorType["B", "L"],
+        attention_mask: TensorType["B", "L"] | None = None,
+    ) -> TensorType["B", "L", "V"]:
 
         res_stream = self.encode_inputs(inputs)
         # print(self.blocks[0])
@@ -79,7 +69,9 @@ class Transformer(TransformerMixin, nn.Module):
         print(f"res stream in transformer forward {res_stream.sum(-1)}")
         return self.get_logits(res_stream)
 
-    def get_logits(self, res_stream: TensorType[B, L, D]) -> TensorType[B, L, V]:
+    def get_logits(
+        self, res_stream: TensorType["B", "L", "D"]
+    ) -> TensorType["B", "L", "V"]:
         if self.tie_weights:
             logits = nn.functional.linear(res_stream, self.tok_embedding.weight)
         else:
@@ -87,8 +79,8 @@ class Transformer(TransformerMixin, nn.Module):
         return logits
 
     def encode_inputs(
-        self, inputs: TensorType[B, L], pos_offset: TensorType[B] | None = None
-    ) -> TensorType[B, L, H]:
+        self, inputs: TensorType["B", "L"], pos_offset: TensorType["B"] | None = None
+    ) -> TensorType["B", "L", "H"]:
         _, seq_len = inputs.shape
         # (B, L, H)
         tok_embeds = self.tok_embedding(inputs)
@@ -104,9 +96,9 @@ class Transformer(TransformerMixin, nn.Module):
 
     def initialise_cache(
         self,
-        res_stream: TensorType[B, L, H],
-        cache_pos: TensorType[B],
-        prompt_len: TensorType[B],
+        res_stream: TensorType["B", "L", "H"],
+        cache_pos: TensorType["B"],
+        prompt_len: TensorType["B"],
         max_new_tokens: int = 20,
     ) -> tuple[Logits | None, list[KVCache] | None]:
         """Run a forward pass through the model and save
@@ -128,12 +120,12 @@ class Transformer(TransformerMixin, nn.Module):
     @torch.no_grad()
     def generate(
         self,
-        inputs: TensorType[B, L],
+        inputs: TensorType["B", "L"],
         use_cache: bool = True,
         max_new_tokens: int = 20,
         pad_token_id: int | None = None,
         eos_token_id: int | None = None,
-    ) -> TensorType[B, Tmax]:
+    ) -> TensorType["B", "Tmax"]:
         """Batched generation for decoder-only transformers."""
         self.eval()
         if use_cache:
@@ -153,11 +145,11 @@ class Transformer(TransformerMixin, nn.Module):
 
     def _decode(
         self,
-        inputs: TensorType[B, Lin],
+        inputs: TensorType["B", "Lin"],
         eos_token_id: int | None = None,
         pad_token_id: int | None = None,
         max_new_tokens: int = 20,
-    ) -> TensorType[B, Lout]:
+    ) -> TensorType["B", "Lout"]:
 
         B = inputs.shape[0]
         pad_mask = create_pad_mask(inputs, pad_token_id)
@@ -192,11 +184,11 @@ class Transformer(TransformerMixin, nn.Module):
 
     def _decode_with_cached_key_values(
         self,
-        inputs: TensorType[B, Lin],
+        inputs: TensorType["B", "Lin"],
         eos_token_id: int | None = None,
         pad_token_id: int | None = None,
         max_new_tokens: int = 20,
-    ) -> TensorType[B, Lout]:
+    ) -> TensorType["B", "Lout"]:
         B = inputs.shape[0]
         pad_mask = create_pad_mask(inputs, pad_token_id)
         prompt_lengths = pad_mask.sum(dim=-1)

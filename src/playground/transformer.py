@@ -58,16 +58,9 @@ class Transformer(TransformerMixin, nn.Module):
     ) -> TensorType["B", "L", "V"]:
 
         res_stream = self.encode_inputs(inputs)
-        # print(self.blocks[0])
-        # print(self.blocks[0].attention.__class__.__name__)
         for i, block in enumerate(self.blocks):
             res_stream = block(res_stream, attention_mask=attention_mask)
-            # print(f"block {i=}, sum along dim -1 for res stream {res_stream.sum(dim=-1)=}")
-        print(
-            f"res stream in transformer forward, before final norm: {res_stream.sum(-1)}"
-        )
         res_stream = self.final_norm(res_stream)
-        print(f"res stream in transformer forward {res_stream.sum(-1)}")
         return self.get_logits(res_stream)
 
     def get_logits(
@@ -109,7 +102,6 @@ class Transformer(TransformerMixin, nn.Module):
         max_step = max_new_tokens + max_prompt_len
         layer_caches = []
         for i, block in enumerate(self.blocks):
-            print(f"Running block {i}")
             res_stream, cache = block.forward_cached(
                 res_stream,
                 None,

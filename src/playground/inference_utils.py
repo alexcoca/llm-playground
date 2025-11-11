@@ -1,20 +1,10 @@
-from typing import NamedTuple, TypeVar
+from typing import NamedTuple
 
 import torch
 from torchtyping import TensorType
 
-B = TypeVar("B")  # batch size
-Dh = TypeVar("Dh")  # attention head dimension
-H = TypeVar("H")  # number of attention heads
-L = TypeVar("L")  # sequence length
-Lin = TypeVar("Lin")  # input sequence length
-T = TypeVar("T")
-Tmax = TypeVar("Tmax")  # max cache size
-V = TypeVar("V")  # vocabulary size
-
-
-Logits = TensorType[B, L, V]
-NextTokenId = TensorType[B, 1]
+Logits = TensorType["B", "L", "V"]
+NextTokenId = TensorType["B", 1]
 
 
 class DecodingError(Exception):
@@ -23,12 +13,12 @@ class DecodingError(Exception):
 
 class KVCache(NamedTuple):
 
-    keys: TensorType[B, H, T, Dh]
-    values: TensorType[B, H, T, Dh]
+    keys: TensorType["B", "H", "T", "Dh"]
+    values: TensorType["B", "H", "T", "Dh"]
 
 
 def get_next_token_ids(
-    logits: Logits, positions: TensorType[B] | None = None
+    logits: Logits, positions: TensorType["B"] | None = None
 ) -> NextTokenId:
     if positions is not None:
         idx = torch.arange(logits.shape[0], device=logits.device)
@@ -40,24 +30,24 @@ def get_next_token_ids(
 
 
 def should_stop_generation(
-    next_token_ids: TensorType[B], eos_token_id: int | None = None
+    next_token_ids: TensorType["B"], eos_token_id: int | None = None
 ) -> bool:
     if eos_token_id is None:
         return False
     return (next_token_ids == eos_token_id).all()
 
 
-def should_truncate(pos: TensorType[B], context_len: int) -> bool:
+def should_truncate(pos: TensorType["B"], context_len: int) -> bool:
     return (pos >= context_len - 1).all().item()
 
 
 def extend_with_next_token(
-    seq: TensorType[B, L],
-    pos: TensorType[B],
-    next_token: TensorType[B, 1],
+    seq: TensorType["B", "L"],
+    pos: TensorType["B"],
+    next_token: TensorType["B", 1],
     *,
     in_place: bool = False,
-) -> TensorType[B, L]:
+) -> TensorType["B", "L"]:
     assert ((pos >= 0) & (pos < seq.size(1))).all().item(), "pos out of bounds"
     out = seq if in_place else seq.clone()
     idx = torch.arange(out.shape[0], device=out.device)
@@ -66,9 +56,9 @@ def extend_with_next_token(
 
 
 def increment_pos(
-    pos: TensorType[B],
-    next_token_ids: TensorType[B, 1],
-    finished_mask: TensorType[B],
+    pos: TensorType["B"],
+    next_token_ids: TensorType["B", 1],
+    finished_mask: TensorType["B"],
     eos_token_id: int | None = None,
 ):
     """In-place increment the index of the last decoded token."""
@@ -82,8 +72,8 @@ def increment_pos(
 
 
 def create_cache_key_mask(
-    cache_pos: TensorType[B], Tmax: int
-) -> TensorType[B, 1, 1, Tmax]:
+    cache_pos: TensorType["B"], Tmax: int
+) -> TensorType["B", 1, 1, "Tmax"]:
     """Masks unfilled positions in cache to avoid attending
     over them during cached inference.
 
@@ -101,9 +91,9 @@ def create_cache_key_mask(
 
 
 def init_output(
-    inputs: TensorType[B, Lin],
+    inputs: TensorType["B", "Lin"],
     max_step: int,
-) -> TensorType[B, Lin]:
+) -> TensorType["B", "Lin"]:
 
     outputs = torch.empty(
         inputs.size(0), max_step, dtype=inputs.dtype, device=inputs.device
@@ -113,7 +103,7 @@ def init_output(
 
 
 def generate_text_simple(
-    model, idx: TensorType[B, L], max_new_tokens: int, context_size: int
+    model, idx: TensorType["B", "L"], max_new_tokens: int, context_size: int
 ):
     for _ in range(max_new_tokens):
         idx_cond = idx[:, -context_size:]

@@ -1,20 +1,20 @@
 import logging
 
-from omegaconf import DictConfig
 import torch
+from omegaconf import DictConfig
 from torch import nn
 from torchtyping import TensorType
 
 from playground.inference_utils import (
-    create_cache_key_mask,
-    get_next_token_ids,
+    DecodingError,
     KVCache,
     Logits,
-    should_truncate,
-    DecodingError,
+    create_cache_key_mask,
     extend_with_next_token,
+    get_next_token_ids,
     increment_pos,
     init_output,
+    should_truncate,
 )
 from playground.layers_optimised import TransformerBlock
 from playground.transformer_mixin import TransformerMixin
@@ -233,7 +233,7 @@ class Transformer(TransformerMixin, nn.Module):
             res_stream = next_tokens
             for layer, block in enumerate(self.blocks):
                 res_stream, _ = block.forward_cached(
-                    res_stream, caches[layer], next_write_pos, cache_keys_allowed=mask
+                    res_stream, caches[layer], next_write_pos, cache_key_mask=mask
                 )
             res_stream = self.final_norm(res_stream)
             logits = self.get_logits(res_stream)

@@ -1,12 +1,12 @@
 import torch
 from omegaconf import DictConfig
 from torch import nn as nn
-from torch.nn import functional as F, LayerNorm, GELU
+from torch.nn import GELU, LayerNorm
+from torch.nn import functional as F
 from torchtyping import TensorType
 
 from playground.inference_utils import KVCache
 from playground.transformer_utils import create_causal_padding_mask
-
 
 QKVTuple = tuple[
     TensorType["B", "H", "L", "Dh"],
@@ -79,14 +79,14 @@ class MultiHeadAttentionOptimised(nn.Module):
         x_step: TensorType["B", "Lq", "D"],
         kv_cache: KVCache,
         cache_pos: TensorType["B"],
-        cache_keys_allowed: TensorType["B", 1, 1, "Tmax"] | None = None,
+        cache_key_mask: TensorType["B", 1, 1, "Tmax"] | None = None,
     ) -> TensorType["B", "Lq", "D_out"]:
 
         q, k, v = self.prepare_qkv(x_step)
         B, n_head, Lq, head_dim = q.shape
         Lk = kv_cache.keys.shape[-2]
         causal_mask = None
-        attn_mask = cache_keys_allowed
+        attn_mask = cache_key_mask
         if Lq > 1:
             assert (
                 (cache_pos + Lq) <= kv_cache.keys.shape[-2]
@@ -101,7 +101,7 @@ class MultiHeadAttentionOptimised(nn.Module):
             causal_mask = key_pos[None, None, None, :] <= cache_pos[:, None, :, None]
 
         if causal_mask is not None:
-            attn_mask = causal_mask & cache_keys_allowed
+            attn_mask = causal_mask & cache_key_mask
         idx = cache_pos.reshape(B, 1, Lq, 1).expand(
             -1, self.num_heads, -1, self.head_dim
         )
@@ -167,20 +167,18 @@ class TransformerBlock(nn.Module):
         res_stream: TensorType["B", "Lq", "D"],
         kv_cache: KVCache | None,
         cache_pos: TensorType["B"],
-        cache_keys_allowed: TensorType["B", 1, 1, "Tmax"] | None = None,
+        cache_key_mask: TensorType["B", 1, 1, "Tmax"] | None = None,
     ) -> tuple[TensorType["B", "Lq", "D"], KVCache]:
 
         cache_pos = cache_pos.to(device=res_stream.device, dtype=torch.long)
 
         if kv_cache is None:
             assert (
-                cache_keys_allowed is not None
+                cache_key_mask is not None
             ), "Require keys mask to initialise cache size"
-            kv_cache = self.init_cache(
-                res_stream, cache_size=cache_keys_allowed.shape[-1]
-            )
+            kv_cache = self.init_cache(res_stream, cache_size=cache_key_mask.shape[-1])
         else:
-            cache_keys_allowed = cache_keys_allowed.to(
+            cache_key_mask = cache_key_mask.to(
                 device=res_stream.device, dtype=torch.bool
             )
 
@@ -190,7 +188,7 @@ class TransformerBlock(nn.Module):
                 attention_input,
                 kv_cache=kv_cache,
                 cache_pos=cache_pos,
-                cache_keys_allowed=cache_keys_allowed,
+                cache_key_mask=cache_key_mask,
             )
         )
         res_stream = res_stream + attention_output

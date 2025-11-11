@@ -19,3 +19,12 @@ dev = [
   "pytest>=8.4,<9",
   "pre-commit>=3.0,<4",
 ]
+
+# pyproject.toml
+[build-system]
+requires = ["hatchling>=1.18"]
+build-backend = "hatchling.build"
+
+[tool.codespell]
+# A comma-separated list of words to ignore.
+ignore-words-list = "Dout"

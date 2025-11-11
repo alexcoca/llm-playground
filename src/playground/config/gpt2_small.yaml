@@ -1,0 +1,18 @@
+# model topology
+vocab_size: 50257
+context_length: 1024
+embed_dim: 768
+n_heads: 12
+n_layers: 12
+qkv_bias: True
+# the ratio between hidden / input size
+# in the feedforward network
+ff_hidden_size_ratio: 4
+
+# dropout
+att_drop_rate: 0.1
+embed_drop_rate: 0.1
+post_attn_drop_rate: 0.1
+post_ffn_drop_rate: 0.1
+
+tie_weights: true

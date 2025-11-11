@@ -32,6 +32,7 @@ ignore-words-list = "Dout"
 [tool.ruff.lint.per-file-ignores]
 "src/playground/inference_utils.py" = ["F821"]
 "src/playground/layers_optimised.py" = ["F821"]
+"src/playground/losses.py" = ["F821"]
 "src/playground/transformer.py" = ["F821"]
 "src/playground/transformer_utils.py" = ["F821"]
 

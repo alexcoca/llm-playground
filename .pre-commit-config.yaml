@@ -1,0 +1,101 @@
+# .pre-commit-config.yaml
+# Python-only, fast, and friendly.
+# Install:  pipx install pre-commit  (or pip install pre-commit)
+# Enable:   pre-commit install
+# Run all:  pre-commit run --all-files
+
+minimum_pre_commit_version: "3.2.0"  # required by newer pre-commit-hooks
+default_language_version:
+  python: python3
+
+ci:
+  autoupdate_schedule: monthly
+
+exclude: |
+  (?x)^(
+    .git/|
+    .mypy_cache/|
+    .ruff_cache/|
+    .venv/|venv/|
+    dist/|build/|
+    node_modules/
+  )
+
+repos:
+  # --- General sanity checks ---
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-merge-conflict
+      - id: check-yaml
+        args: [--unsafe]
+      - id: check-toml
+      - id: check-json
+      - id: check-added-large-files
+        args: [--maxkb=1000]
+      - id: detect-private-key
+      - id: debug-statements
+      - id: check-case-conflict
+
+  # --- Linting (super fast) ---
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.4
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+
+  # --- Formatting (battle-tested Black) ---
+  - repo: https://github.com/psf/black-pre-commit-mirror
+    rev: "25.1.0"
+    hooks:
+      - id: black
+
+  # --- Modernize syntax safely ---
+  - repo: https://github.com/asottile/pyupgrade
+    rev: v3.21.1
+    hooks:
+      - id: pyupgrade
+        args: [--py3-plus]
+
+  # --- Typing (adjust paths/args to your project) ---
+#  - repo: https://github.com/pre-commit/mirrors-mypy
+#    rev: v1.18.2
+#    hooks:
+#      - id: mypy
+#        args: [--strict]
+#        files: ^(src|app|package_name)/  # tweak to your package layout
+#        additional_dependencies: []     # add stubs here, e.g. ["boto3-stubs[s3]==1.35.*"]
+
+  # --- Spell-check (keeps docs & comments tidy) ---
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.1
+    hooks:
+      - id: codespell
+        args: [--ignore-words-list=crate,aks]  # tweak as needed
+
+  # --- Validate pyproject.toml schema ---
+  - repo: https://github.com/abravalheri/validate-pyproject
+    rev: v0.24.1
+    hooks:
+      - id: validate-pyproject
+        additional_dependencies: ["validate-pyproject-schema-store[all]"]
+
+  # --- Secret scanning (optional but recommended) ---
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ["--baseline", ".secrets.baseline"]
+        exclude: package-lock.json
+
+  # --- Run tests before pushing (optional) ---
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest (pre-push)
+        entry: pytest -q
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

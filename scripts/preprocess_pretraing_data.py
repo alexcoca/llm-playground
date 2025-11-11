@@ -10,7 +10,7 @@ from playground.data_utils import dump_text, load_text, train_val_split
 logger = logging.getLogger(__name__)
 
 
-@hydra.main(config_path="../configs", config_name="pretrain_preprocess.yaml")
+@hydra.main(config_path="../configs", config_name="pretrain_preprocess")
 def preprocess_data(cfg: DictConfig):
 
     cfg = instantiate(cfg)

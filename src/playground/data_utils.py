@@ -1,6 +1,8 @@
+import json
 import logging
 import urllib.request
 from pathlib import Path
+from typing import Any
 
 from tiktoken import Encoding
 
@@ -46,3 +48,16 @@ def train_val_split(
     train_text = tokenizer.decode(train_tok)
     val_text = tokenizer.decode(val_tok)
     return train_text, val_text
+
+
+def load_json(path: str | Path, data_info: str = "data"):
+    logger.info(f"Loading {data_info} from data!")
+    with open(path) as f:
+        data = json.load(f)
+    return data
+
+
+def save_json(data: Any, path: str | Path, indent: int = 4, data_info: str = "data"):
+    logger.info(f"Saving {data_info} at {path}.")
+    with open(path, "w") as f:
+        json.dump(data, f, indent=indent)

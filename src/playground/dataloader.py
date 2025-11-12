@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 import torch
@@ -5,6 +6,8 @@ from tiktoken import Encoding, get_encoding
 from torch.utils.data import DataLoader, Dataset
 
 from playground.data_utils import load_text
+
+logger = logging.getLogger(__name__)
 
 
 def chunk_text(
@@ -21,7 +24,7 @@ def chunk_text(
     return context, targets
 
 
-class GPTDataset(Dataset):
+class NextTokenPredictionDataset(Dataset):
 
     def __init__(
         self, path: str | Path, tokenizer: Encoding, max_length: int, stride: int
@@ -37,7 +40,9 @@ class GPTDataset(Dataset):
         return self.input_ids[item], self.target_ids[item]
 
 
-def get_test_dataloader(dataset: Dataset, batch_size: int = 1, num_workers: int = 0):
+def get_validation_test_dataloader(
+    dataset: Dataset, batch_size: int = 1, num_workers: int = 0
+):
     return DataLoader(
         dataset=dataset,
         batch_size=batch_size,
@@ -51,6 +56,7 @@ def get_train_dataloader(
     num_workers: int = 0,
     drop_last: bool = True,
 ):
+    logger.info("Creating train dataloader")
     return DataLoader(
         dataset=dataset,
         batch_size=batch_size,
@@ -66,4 +72,4 @@ def get_dataset(
     stride: int = 128,
 ):
     tokenizer = get_encoding("gpt2")
-    return GPTDataset(path, tokenizer, max_length, stride)
+    return NextTokenPredictionDataset(path, tokenizer, max_length, stride)

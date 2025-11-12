@@ -26,6 +26,12 @@ dev = [
 requires = ["hatchling>=1.18"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.wheel]
+packages = ["src/playground"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/playground", "pyproject.toml", "README.md"]
+
 [tool.codespell]
 # A comma-separated list of words to ignore.
 ignore-words-list = "Dout"

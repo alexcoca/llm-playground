@@ -1,0 +1,3 @@
+_target_: tiktoken.get_encoding
+_args_:
+  - 'gpt2'

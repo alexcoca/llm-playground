@@ -1,0 +1,14 @@
+train:
+  train_file: ${root:data/processed/train/the-verdict.txt}
+  max_length: 256
+  stride: 256
+
+validation:
+  val_file: ${root:data/processed/validation/the-verdict.txt}
+  max_length: 256
+  stride: 256
+
+test:
+  test_file: ~
+  max_length: ~
+  stride: ~

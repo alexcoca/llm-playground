@@ -1,22 +1,39 @@
 import json
 import logging
+from functools import cached_property
 from pathlib import Path
 from typing import Literal
 
 import tiktoken
 import torch
+from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
 from pydantic import BaseModel
 from torch import nn
 from torch.utils.data import Dataset
 
 from playground.dataloader import get_train_dataloader
+from playground.metadata import (
+    FINAL_NORM,
+    LAYER_NORM_PRE_ATT,
+    LAYER_NORM_PRE_FFN,
+    POS_EMBEDDING,
+    TOK_EMBEDDING,
+)
 from playground.trainer_utils import ensure_determinism, set_seed
 
 logger = logging.getLogger(__name__)
 
 Split = Literal["train", "validation"]
 TRAINER_STATE_NAME = "trainer_state.json"
+NO_DECAY_PARAMS = [
+    "bias",
+    LAYER_NORM_PRE_FFN,
+    LAYER_NORM_PRE_ATT,
+    FINAL_NORM,
+    TOK_EMBEDDING,
+    POS_EMBEDDING,
+]
 
 
 class TrainerState(BaseModel):
@@ -76,12 +93,15 @@ class TrainerState(BaseModel):
         logger.info(f"Trainer state saved to {filepath}")
 
 
-def prepare_model(model: torch.nn.Module, device: torch.device):
+def prepare_model(model: torch.nn.Module, device: torch.device) -> torch.nn.Module:
     model.train()
     model.to(device)
+    return model
 
 
-def prepare_tensor(*tensors: torch.Tensor, device: torch.device):
+def prepare_tensor(
+    *tensors: torch.Tensor, device: torch.device
+) -> tuple[torch.Tensor, ...]:
     return tuple(t.to(device) for t in tensors)
 
 
@@ -115,6 +135,45 @@ class Trainer:
         self._save_steps = trainer_config.save_steps
         self._eval_steps = trainer_config.eval_steps
         self.num_epochs = trainer_config.num_epochs
+        self.optimiser = self._init_optimiser(self._model, optimiser_config.optimiser)
+        self.lr_scheduler = self._init_scheduler(self.optimiser, optimiser_config)
+
+    @staticmethod
+    def _init_optimiser(model: nn.Module, config: DictConfig) -> torch.optim.Optimizer:
+        logger.info(f"Weight decay will not be applied to {NO_DECAY_PARAMS}")
+        no_weight_decay, rest = [], []
+        for name, param in model.named_parameters():
+            if any(nd in name for nd in NO_DECAY_PARAMS):
+                no_weight_decay.append(param)
+            else:
+                rest.append(param)
+
+        param_groups = [
+            {"params": rest, "weight_decay": config.weight_decay},
+            {"params": no_weight_decay, "weight_decay": 0.0},
+        ]
+        return instantiate(config, params=param_groups)
+
+    def _init_scheduler(self, optimiser: torch.optim.Optimizer, config: DictConfig):
+        return instantiate(
+            config.scheduler,
+            num_warmup_steps=self.num_train_steps * config.warmup_perc,
+            num_training_steps=self.num_train_steps,
+            optimizer=optimiser,
+        )
+
+    @cached_property
+    def num_train_steps(self) -> int:
+
+        batch_size = self._dataloader_config.train.batch_size
+        drop_last = self._dataloader_config.train.drop_last
+
+        if drop_last:
+            steps_per_epoch = len(self._train_dataset) // batch_size
+        else:
+            steps_per_epoch = (len(self._train_dataset) + batch_size - 1) // batch_size
+
+        return self.num_epochs * steps_per_epoch
 
     def train(self, resume_from_checkpoint: str | Path | None = None):
         if resume_from_checkpoint is not None:

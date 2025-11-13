@@ -34,7 +34,7 @@ include = ["src/playground", "pyproject.toml", "README.md"]
 
 [tool.codespell]
 # A comma-separated list of words to ignore.
-ignore-words-list = "Dout"
+ignore-words-list = "Dout,nd"
 
 [tool.ruff.lint.per-file-ignores]
 "src/playground/inference_utils.py" = ["F821"]

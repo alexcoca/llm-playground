@@ -1,6 +1,7 @@
 num_epochs: 10
 save_steps: 100
 eval_steps: 100
+log_steps: 100
 ignore_token_index: -100
 ensure_determinism: False
 seed: 0

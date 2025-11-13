@@ -42,6 +42,7 @@ ignore-words-list = "Dout,nd"
 "src/playground/losses.py" = ["F821"]
 "src/playground/transformer.py" = ["F821"]
 "src/playground/transformer_utils.py" = ["F821"]
+"src/playground/traniner.py" = ["F821"]
 
 [tool.isort]
 profile = "black"

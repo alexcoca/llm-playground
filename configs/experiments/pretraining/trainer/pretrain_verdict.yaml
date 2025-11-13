@@ -4,6 +4,7 @@ eval_steps: 100
 log_steps: 100
 ignore_token_index: -100
 ensure_determinism: False
+allow_ckpt_override: True
 seed: 0
 
 experiment_name: ???
@@ -15,3 +16,6 @@ device: 'mps'
 sample_steps: 'epoch'
 sample_contexts:
   - "Every effort moves you"
+
+loggers:
+  - _target_: playground.loggers.ConsoleLogger

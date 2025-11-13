@@ -86,6 +86,7 @@ class Trainer:
         self.optimiser = self._init_optimiser(self._model, optimiser_config.optimiser)
         self.lr_scheduler = self._init_scheduler(self.optimiser, optimiser_config)
         self.ignore_token_idx = trainer_config.ignore_token_index
+        self.loggers = instantiate(trainer_config.loggers) or []
 
     @staticmethod
     def _init_optimiser(model: nn.Module, config: DictConfig) -> torch.optim.Optimizer:
@@ -147,7 +148,7 @@ class Trainer:
             elif action == TrainerAction.EVALUATE:
                 self.evaluate(**kwargs)
             elif action == TrainerAction.LOG:
-                raise NotImplementedError
+                self.log(**kwargs)
             elif action == TrainerAction.SAMPLE:
                 self.sample(**kwargs)
             elif action == TrainerAction.STOP:
@@ -167,6 +168,12 @@ class Trainer:
         self.optimiser.step()
         self.lr_scheduler.step()
         return loss.item()
+
+    def log(self, **kwargs):
+        metrics = kwargs.get("metrics", {})
+        step = self.state.global_step
+        for log in self.loggers:
+            log.log(metrics, step)
 
     def save(self, **kwargs):
         this_checkpoint_dir = self._checkpoint_dir / CHECKPOINT_TEMPLATE.format(

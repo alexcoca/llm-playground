@@ -1,5 +1,6 @@
 import logging
 import math
+import time
 from functools import cached_property
 from pathlib import Path
 
@@ -30,6 +31,7 @@ from playground.trainer_utils import (
     TrainerControl,
     TrainerControlConfig,
     TrainerState,
+    TrainingResult,
     count_tokens,
     ensure_determinism,
     move_to_device,
@@ -152,7 +154,7 @@ class Trainer:
         ]
         return torch.tensor(padded)
 
-    def train(self, resume_from_checkpoint: str | Path | None = None):
+    def train(self, resume_from_checkpoint: str | Path | None = None) -> TrainingResult:
         if resume_from_checkpoint is not None:
             raise NotImplementedError("Checkpointing not implemented")
         loader_config = OmegaConf.to_container(
@@ -160,6 +162,7 @@ class Trainer:
         )
         model = self._model
         dataloader = get_train_dataloader(self._train_dataset, **loader_config)
+        start_time = time.time()
         try:
             for epoch in range(self.state.num_epochs_trained, self.num_epochs):
                 for step, (inputs, targets) in enumerate(dataloader):
@@ -177,7 +180,13 @@ class Trainer:
                     )
                     self.process_action_results(results)
         except FinishedTraining:
-            raise NotImplementedError
+            logger.info("Training finished")
+        return TrainingResult(
+            total_time=time.time() - start_time,
+            total_tokens=self.state.tokens_seen,
+            final_step=self.state.global_step,
+            epochs_completed=self.state.num_epochs_trained,
+        )
 
     def execute_actions(
         self, actions: list[TrainerAction], **kwargs
@@ -189,7 +198,6 @@ class Trainer:
                 self.save(**kwargs)
             elif action == TrainerAction.EVALUATE:
                 eval_metrics = self.evaluate(**kwargs)
-                # TODO: ASSERT DISTINCT KEYS HERE?
                 metrics |= eval_metrics
             elif action == TrainerAction.LOG:
                 self.log(metrics=metrics, **kwargs)
@@ -239,30 +247,19 @@ class Trainer:
         self.lr_scheduler.step()
         return loss.item()
 
-    def log(self, **kwargs):
-        metrics = kwargs.get("metrics", {})
-        step = self.state.global_step
-        for log in self.loggers:
-            log.log(metrics, step)
-
-    def save(self, **kwargs):
-        this_checkpoint_dir = self._checkpoint_dir / CHECKPOINT_TEMPLATE.format(
-            step=self.state.global_step
-        )
-        this_checkpoint_dir.mkdir(parents=True, exist_ok=self._allow_ckpt_override)
-        checkpoint = {
-            "model": self._model.state_dict(),
-            "optimizer": self.optimiser.state_dict(),
-            "lr_scheduler": self.lr_scheduler.state_dict(),
-        }
-        torch.save(checkpoint, this_checkpoint_dir / "model.pt")
-        self.state.save_to_json(
-            this_checkpoint_dir, TRAINER_STATE_NAME, what="Trainer state"
-        )
-        self.control.config.save_to_json(
-            this_checkpoint_dir,
-            TRAINER_CONTROLLER_CONFIG_NAME,
-            what="Trainer controller config",
+    def compute_loss(
+        self,
+        outputs: TensorType["B", "L", "V"],
+        targets: TensorType["B", "L"],
+        **kwargs,
+    ):
+        ignore_idx = kwargs.get("ignore_idx", -100)
+        reduction = kwargs.get("reduction", "mean")
+        return language_modelling_loss(
+            next_token_logits=outputs,
+            next_token_ids=targets,
+            ignore_idx=ignore_idx,
+            reduction=reduction,
         )
 
     def evaluate(self, **kwargs) -> MetricsDict:
@@ -295,7 +292,37 @@ class Trainer:
             f"{EVAL_METRIC_KEY}/perplexity": perplexity,
         }
 
+    def predict(self):
+        pass
+
+    def log(self, **kwargs):
+        metrics = kwargs.get("metrics", {})
+        step = self.state.global_step
+        for log in self.loggers:
+            log.log(metrics, step)
+
+    def save(self, **kwargs):
+        this_checkpoint_dir = self._checkpoint_dir / CHECKPOINT_TEMPLATE.format(
+            step=self.state.global_step
+        )
+        this_checkpoint_dir.mkdir(parents=True, exist_ok=self._allow_ckpt_override)
+        checkpoint = {
+            "model": self._model.state_dict(),
+            "optimizer": self.optimiser.state_dict(),
+            "lr_scheduler": self.lr_scheduler.state_dict(),
+        }
+        torch.save(checkpoint, this_checkpoint_dir / "model.pt")
+        self.state.save_to_json(
+            this_checkpoint_dir, TRAINER_STATE_NAME, what="Trainer state"
+        )
+        self.control.config.save_to_json(
+            this_checkpoint_dir,
+            TRAINER_CONTROLLER_CONFIG_NAME,
+            what="Trainer controller config",
+        )
+
     def sample(self, **kwargs) -> list[str]:
+        logger.info(f"Sampling from the model at step {self.state.global_step}")
         model = self._model
         model.eval()
 
@@ -311,21 +338,3 @@ class Trainer:
         samples = [self._tokenizer.decode(out.tolist()) for out in outputs]
         model.train()
         return samples
-
-    def predict(self):
-        pass
-
-    def compute_loss(
-        self,
-        outputs: TensorType["B", "L", "V"],
-        targets: TensorType["B", "L"],
-        **kwargs,
-    ):
-        ignore_idx = kwargs.get("ignore_idx", -100)
-        reduction = kwargs.get("reduction", "mean")
-        return language_modelling_loss(
-            next_token_logits=outputs,
-            next_token_ids=targets,
-            ignore_idx=ignore_idx,
-            reduction=reduction,
-        )

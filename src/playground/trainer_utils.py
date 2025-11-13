@@ -198,6 +198,14 @@ class TrainerControl:
         return [action for step, action in self._control_steps if getattr(self, step)()]
 
 
+class TrainingResult(SerializableConfig):
+    total_time: float
+    total_tokens: int
+    final_step: int
+    epochs_completed: int
+    final_loss: float | None = None
+
+
 def prepare_model(model: torch.nn.Module, device: torch.device) -> torch.nn.Module:
     model.train()
     model.to(device)

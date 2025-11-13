@@ -1,3 +1,6 @@
+defaults:
+  - sampling: greedy
+
 num_epochs: 10
 save_steps: 100
 eval_steps: 100

@@ -72,16 +72,16 @@ class Trainer:
             set_seed(seed)
         self.device = torch.device(trainer_config.device)
         self._model = prepare_model(model, self.device)
+        self._checkpoint_dir = Path(trainer_config.checkpoint_dir)
+        self._allow_ckpt_override = trainer_config.allow_ckpt_override
         self._tokenizer = tokenizer
         self._train_dataset = train_dataset
         self._val_dataset = validation_dataset
+        self.validation_data_loader = None
         self._test_dataset = test_dataset
-        self._checkpoint_dir = Path(trainer_config.checkpoint_dir)
         self._dataloader_config = data_loader_config
         self.num_epochs = trainer_config.num_epochs
-        self._allow_ckpt_override = trainer_config.allow_ckpt_override
         self.state = TrainerState(seed=seed)
-        self.validation_data_loader = None
         control_config = TrainerControlConfig(
             save_steps=trainer_config.save_steps,
             eval_steps=trainer_config.eval_steps,
@@ -94,6 +94,7 @@ class Trainer:
         self.optimiser = self.init_optimiser(self._model, optimiser_config.optimiser)
         self.lr_scheduler = self.init_scheduler(self.optimiser, optimiser_config)
         self.ignore_token_idx = trainer_config.ignore_token_index
+        self._sampling_config = trainer_config.sampling
         self.samples_dir = trainer_config.samples_dir
         self.display_samples = trainer_config.display_samples
         if self.samples_dir is not None:
@@ -136,6 +137,19 @@ class Trainer:
             steps_per_epoch = (len(self._train_dataset) + batch_size - 1) // batch_size
 
         return self.num_epochs * steps_per_epoch
+
+    @cached_property
+    def sample_inputs(self) -> torch.Tensor:
+        """Tokenize and tensorize prompts for sampling."""
+
+        prompts = self._sampling_config.prompts
+        token_ids = [self._tokenizer.encode(ctx) for ctx in prompts]
+        max_len = max(len(ids) for ids in token_ids)
+        padded = [
+            ids + [self._tokenizer.eot_token] * (max_len - len(ids))
+            for ids in token_ids
+        ]
+        return torch.tensor(padded)
 
     def train(self, resume_from_checkpoint: str | Path | None = None):
         if resume_from_checkpoint is not None:
@@ -263,9 +277,9 @@ class Trainer:
         model.eval()
         total_loss, total_tokens = 0.0, 0
         with torch.no_grad():
-            for step, (input, targets) in enumerate(self.validation_data_loader):
+            for step, (inputs, targets) in enumerate(self.validation_data_loader):
                 inputs, targets = move_to_device(inputs, targets, device=self.device)
-                logits = self._model(input)
+                logits = self._model(inputs)
                 mask = targets != self.ignore_token_idx
                 loss = self.compute_loss(
                     logits, targets, ignore_idx=self.ignore_token_idx, reduction="sum"
@@ -280,9 +294,22 @@ class Trainer:
             f"{EVAL_METRIC_KEY}/perplexity": perplexity,
         }
 
-    def sample(self, **kwargs):
-        # TODO: Sample trajectories from the model
-        pass
+    def sample(self, **kwargs) -> list[str]:
+        model = self._model
+        model.eval()
+
+        with torch.no_grad():
+            inputs = self.sample_inputs.to(self.device)
+            outputs = model.generate(
+                inputs,
+                max_new_tokens=self._sampling_config.max_new_tokens,
+                eos_token_id=self._tokenizer.eot_token,
+                pad_token_id=self._tokenizer.eot_token,
+            )
+
+        samples = [self._tokenizer.decode(out.tolist()) for out in outputs]
+        model.train()
+        return samples
 
     def predict(self):
         pass

@@ -1,0 +1,6 @@
+prompts:
+  - "Every effort moves you"
+  - "The quick brown"
+  - "Once upon a time"
+
+max_new_tokens: 50

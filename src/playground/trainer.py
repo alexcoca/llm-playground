@@ -20,6 +20,10 @@ from playground.metadata import (
     TOK_EMBEDDING,
 )
 from playground.trainer_utils import (
+    CHECKPOINT_TEMPLATE,
+    TRAINER_CONTROLLER_CONFIG_NAME,
+    TRAINER_STATE_NAME,
+    TrainerAction,
     TrainerControl,
     TrainerControlConfig,
     TrainerState,
@@ -65,9 +69,10 @@ class Trainer:
         self._train_dataset = train_dataset
         self._val_dataset = validation_dataset
         self._test_dataset = test_dataset
-        self._checkpoint_dir = trainer_config.checkpoint_dir
+        self._checkpoint_dir = Path(trainer_config.checkpoint_dir)
         self._dataloader_config = data_loader_config
         self.num_epochs = trainer_config.num_epochs
+        self._allow_ckpt_override = trainer_config.allow_ckpt_override
         self.state = TrainerState(seed=seed)
         control_config = TrainerControlConfig(
             save_steps=trainer_config.save_steps,
@@ -131,21 +136,63 @@ class Trainer:
             for step, (inputs, targets) in enumerate(dataloader):
                 inputs, targets = move_to_device(inputs, targets, device=self.device)
                 self.train_step(model, inputs, targets)
+                # TODO: ACCOUNT FOR PADDING LATER
                 self.state.increment_seen_tokens(inputs.numel())
                 self.state.increment_step()
+
+    def execute_actions(self, actions: list[TrainerAction], **kwargs) -> bool:
+        for action in actions:
+            if action == TrainerAction.SAVE:
+                self.save(**kwargs)
+            elif action == TrainerAction.EVALUATE:
+                self.evaluate(**kwargs)
+            elif action == TrainerAction.LOG:
+                raise NotImplementedError
+            elif action == TrainerAction.SAMPLE:
+                self.sample(**kwargs)
+            elif action == TrainerAction.STOP:
+                raise NotImplementedError
+            else:
+                raise ValueError(f"Unknown action : {action}")
 
     def train_step(
         self, model: nn.Module, inputs: TensorType["B", "L", "D"], targets: ["B", "L"]
     ) -> torch.Tensor:
         self.optimiser.zero_grad()
         logits = model(inputs)
-        loss = self.compute_loss(logits, targets, model=model)
+        loss = self.compute_loss(
+            logits, targets, model=model, ignore_idx=self.ignore_token_idx
+        )
         loss.backward()
         self.optimiser.step()
         self.lr_scheduler.step()
         return loss.item()
 
-    def evaluate(self):
+    def save(self, **kwargs):
+        this_checkpoint_dir = self._checkpoint_dir / CHECKPOINT_TEMPLATE.format(
+            step=self.state.global_step
+        )
+        this_checkpoint_dir.mkdir(parents=True, exist_ok=self._allow_ckpt_override)
+        checkpoint = {
+            "model": self._model.state_dict(),
+            "optimizer": self.optimiser.state_dict(),
+            "lr_scheduler": self.lr_scheduler.state_dict(),
+        }
+        torch.save(checkpoint, this_checkpoint_dir / "model.pt")
+        self.state.save_to_json(
+            this_checkpoint_dir, TRAINER_STATE_NAME, what="Trainer state"
+        )
+        self.control.config.save_to_json(
+            this_checkpoint_dir,
+            TRAINER_CONTROLLER_CONFIG_NAME,
+            what="Trainer controller config",
+        )
+
+    def sample(self, **kwargs):
+        # TODO: Sample trajectories from the model
+        pass
+
+    def evaluate(self, **kwargs):
         pass
 
     def predict(self):

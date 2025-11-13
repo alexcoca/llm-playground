@@ -61,6 +61,8 @@ class TrainerAction(str, Enum):
 
 Split = Literal["train", "validation"]
 TRAINER_STATE_NAME = "trainer_state.json"
+TRAINER_CONTROLLER_CONFIG_NAME = "trainer_controller_config.json"
+CHECKPOINT_TEMPLATE = "checkpoint-{step}"
 
 
 class SerializableConfig(BaseModel):
@@ -149,6 +151,7 @@ class TrainerControl:
     def __init__(self, state: TrainerState, config: TrainerControlConfig):
 
         self.state = state
+        self.config = config
         self.save_steps = config.save_steps
         self.eval_steps = config.eval_steps
         self.log_steps = config.log_steps

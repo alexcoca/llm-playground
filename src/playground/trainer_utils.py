@@ -8,7 +8,7 @@ from typing import Literal
 
 import numpy as np
 import torch
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,45 @@ Split = Literal["train", "validation"]
 TRAINER_STATE_NAME = "trainer_state.json"
 
 
-class TrainerState(BaseModel):
+class SerializableConfig(BaseModel):
+    def save_to_json(self, output_dir: Path | str, fname: str, what: str = "File"):
+        """Saves config to a JSON file."""
+        if not isinstance(output_dir, Path):
+            output_dir = Path(output_dir)
+
+        output_dir.mkdir(parents=True, exist_ok=True)
+        filepath = output_dir / fname
+
+        json_data = self.model_dump_json(indent=2)
+        filepath.write_text(json_data)
+
+        logger.info(f"{what} saved to {filepath}")
+
+    @classmethod
+    def load_from_json(
+        cls, input_dir: Path | str, fname: str, what: str = "file"
+    ) -> "TrainerState":
+        """Loads trainer state from a JSON file, or returns a new state."""
+        if not isinstance(input_dir, Path):
+            input_dir = Path(input_dir)
+
+        filepath = input_dir / fname
+
+        if not filepath.exists():
+            logger.warning(f"No {what} found at {filepath}. Returning empty config.")
+            return cls()
+
+        try:
+            json_data = filepath.read_text()
+            logger.info(f"Loading {what} from {filepath}")
+            return cls.model_validate_json(json_data)
+
+        except (json.JSONDecodeError, FileNotFoundError) as e:
+            logger.error(f"Error loading trainer state: {e}.")
+            raise e
+
+
+class TrainerState(SerializableConfig):
 
     global_step: int = 0
     num_epochs_trained: int = 0
@@ -85,65 +123,33 @@ class TrainerState(BaseModel):
     def maybe_update_best_loss(self, loss: float, split: Split):
         raise NotImplementedError
 
-    @classmethod
-    def load_from_json(cls, input_dir: Path | str) -> "TrainerState":
-        """Loads trainer state from a JSON file, or returns a new state."""
-        if not isinstance(input_dir, Path):
-            input_dir = Path(input_dir)
 
-        filepath = input_dir / TRAINER_STATE_NAME
+class TrainerControlConfig(SerializableConfig):
+    save_steps: int
+    eval_steps: int
+    log_steps: int
+    epoch_steps: int
+    num_train_steps: int
+    sample_steps: int | Literal["epoch"] | None
 
-        if not filepath.exists():
-            logger.warning(f"No state file found at {filepath}. Starting new state.")
-            return cls()
-
-        try:
-            json_data = filepath.read_text()
-            logger.info(f"Loading state from {filepath}")
-            return cls.model_validate_json(json_data)
-
-        except (json.JSONDecodeError, FileNotFoundError) as e:
-            logger.error(f"Error loading trainer state: {e}.")
-            raise e
-
-    def save_to_json(self, output_dir: Path | str):
-        """Saves the trainer state to a JSON file."""
-        if not isinstance(output_dir, Path):
-            output_dir = Path(output_dir)
-
-        output_dir.mkdir(parents=True, exist_ok=True)
-        filepath = output_dir / TRAINER_STATE_NAME
-
-        json_data = self.model_dump_json(indent=2)
-        filepath.write_text(json_data)
-
-        logger.info(f"Trainer state saved to {filepath}")
+    @model_validator(mode="after")
+    def resolve_sample_steps(self):
+        """Convert 'epoch' literal to actual epoch_steps value."""
+        if self.sample_steps == "epoch":
+            self.sample_steps = self.epoch_steps
+        return self
 
 
 class TrainerControl:
 
-    def __init__(
-        self,
-        state: TrainerState,
-        save_steps: int,
-        eval_steps: int,
-        log_steps: int,
-        epoch_steps: int,
-        num_train_steps: int,
-        sample_steps: int | Literal["epoch"] | None,
-    ):
+    def __init__(self, state: TrainerState, config: TrainerControlConfig):
 
         self.state = state
-        self.save_steps = save_steps
-        self.eval_steps = eval_steps
-        self.log_steps = log_steps
-        self.num_train_steps = num_train_steps
-        if sample_steps == "epoch":
-            self.sample_steps = epoch_steps
-        elif sample_steps is None:
-            self.sample_steps = None
-        else:
-            self.sample_steps = sample_steps
+        self.save_steps = config.save_steps
+        self.eval_steps = config.eval_steps
+        self.log_steps = config.log_steps
+        self.num_train_steps = config.num_train_steps
+        self.sample_steps = config.sample_steps
         self._control_steps = (
             ("should_log", TrainerAction.LOG),
             ("should_save", TrainerAction.SAVE),

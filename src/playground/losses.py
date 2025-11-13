@@ -1,3 +1,5 @@
+from typing import Literal
+
 import torch
 import torch.nn.functional as F
 from torchtyping import TensorType
@@ -7,6 +9,7 @@ def language_modelling_loss(
     next_token_logits: TensorType["B", "L", "V"],
     next_token_ids: TensorType["B", "L"],
     ignore_idx: int = -100,
+    reduction: Literal["mean", "sum"] = "mean",
 ) -> torch.Tensor:
     """Compute language modelling loss at each
     position in a batch of sequences.
@@ -34,5 +37,8 @@ def language_modelling_loss(
     targets_flat = next_token_ids.flatten()
 
     return F.cross_entropy(
-        input=logits_flat, target=targets_flat, ignore_index=ignore_idx
+        input=logits_flat,
+        target=targets_flat,
+        ignore_index=ignore_idx,
+        reduction=reduction,
     )

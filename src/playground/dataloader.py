@@ -42,7 +42,7 @@ class NextTokenPredictionDataset(Dataset):
 
 def get_validation_test_dataloader(
     dataset: Dataset, batch_size: int = 1, num_workers: int = 0
-):
+) -> DataLoader:
     return DataLoader(
         dataset=dataset,
         batch_size=batch_size,
@@ -55,7 +55,7 @@ def get_train_dataloader(
     batch_size: int = 1,
     num_workers: int = 0,
     drop_last: bool = True,
-):
+) -> DataLoader:
     logger.info("Creating train dataloader")
     return DataLoader(
         dataset=dataset,

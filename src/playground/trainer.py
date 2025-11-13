@@ -1,4 +1,5 @@
 import logging
+import math
 from functools import cached_property
 from pathlib import Path
 
@@ -10,7 +11,7 @@ from torch import nn
 from torch.utils.data import Dataset
 from torchtyping import TensorType
 
-from playground.dataloader import get_train_dataloader
+from playground.dataloader import get_train_dataloader, get_validation_test_dataloader
 from playground.losses import language_modelling_loss
 from playground.metadata import (
     FINAL_NORM,
@@ -46,6 +47,10 @@ NO_DECAY_PARAMS = [
     POS_EMBEDDING,
 ]
 
+MetricsDict = dict[str, float]
+TRAINING_METRIC_KEY = "train"
+EVAL_METRIC_KEY = "eval"
+
 
 class Trainer:
 
@@ -76,6 +81,7 @@ class Trainer:
         self.num_epochs = trainer_config.num_epochs
         self._allow_ckpt_override = trainer_config.allow_ckpt_override
         self.state = TrainerState(seed=seed)
+        self.validation_data_loader = None
         control_config = TrainerControlConfig(
             save_steps=trainer_config.save_steps,
             eval_steps=trainer_config.eval_steps,
@@ -150,7 +156,9 @@ class Trainer:
                     self.state.increment_seen_tokens(inputs.numel())
                     self.state.increment_step()
                     actions = self.control.determine_actions()
-                    results = self.execute_actions(actions, metrics={"loss": loss})
+                    results = self.execute_actions(
+                        actions, metrics={f"{TRAINING_METRIC_KEY}/loss": loss}
+                    )
                     self.process_action_results(results)
         except FinishedTraining:
             raise NotImplementedError
@@ -241,11 +249,39 @@ class Trainer:
             what="Trainer controller config",
         )
 
+    def evaluate(self, **kwargs) -> MetricsDict:
+        if self._val_dataset is None:
+            return {}
+        if self.validation_data_loader is None:
+            loader_config = OmegaConf.to_container(
+                self._dataloader_config.validation, resolve=True
+            )
+            self.validation_data_loader = get_validation_test_dataloader(
+                self._val_dataset, **loader_config
+            )
+        model = self._model
+        model.eval()
+        total_loss, total_tokens = 0.0, 0
+        with torch.no_grad():
+            for step, (input, targets) in enumerate(self.validation_data_loader):
+                inputs, targets = move_to_device(inputs, targets, device=self.device)
+                logits = self._model(input)
+                mask = targets != self.ignore_token_idx
+                loss = self.compute_loss(
+                    logits, targets, ignore_idx=self.ignore_token_idx, reduction="sum"
+                )
+                total_loss += loss.item()
+                total_tokens += mask.sum().item()
+        model.train()
+        avg_loss = total_loss / total_tokens
+        perplexity = math.exp(avg_loss)
+        return {
+            f"{EVAL_METRIC_KEY}/avg_loss": avg_loss,
+            f"{EVAL_METRIC_KEY}/perplexity": perplexity,
+        }
+
     def sample(self, **kwargs):
         # TODO: Sample trajectories from the model
-        pass
-
-    def evaluate(self, **kwargs):
         pass
 
     def predict(self):
@@ -258,6 +294,10 @@ class Trainer:
         **kwargs,
     ):
         ignore_idx = kwargs.get("ignore_idx", -100)
+        reduction = kwargs.get("reduction", "mean")
         return language_modelling_loss(
-            next_token_logits=outputs, next_token_ids=targets, ignore_idx=ignore_idx
+            next_token_logits=outputs,
+            next_token_ids=targets,
+            ignore_idx=ignore_idx,
+            reduction=reduction,
         )

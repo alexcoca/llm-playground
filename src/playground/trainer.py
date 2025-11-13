@@ -30,6 +30,7 @@ from playground.trainer_utils import (
     TrainerControl,
     TrainerControlConfig,
     TrainerState,
+    count_tokens,
     ensure_determinism,
     move_to_device,
     prepare_model,
@@ -166,8 +167,9 @@ class Trainer:
                         inputs, targets, device=self.device
                     )
                     loss = self.train_step(model, inputs, targets)
-                    # TODO: ACCOUNT FOR PADDING LATER
-                    self.state.increment_seen_tokens(inputs.numel())
+                    self.state.increment_seen_tokens(
+                        count_tokens(inputs, self.ignore_token_idx)
+                    )
                     self.state.increment_step()
                     actions = self.control.determine_actions()
                     results = self.execute_actions(
@@ -280,12 +282,11 @@ class Trainer:
             for step, (inputs, targets) in enumerate(self.validation_data_loader):
                 inputs, targets = move_to_device(inputs, targets, device=self.device)
                 logits = self._model(inputs)
-                mask = targets != self.ignore_token_idx
                 loss = self.compute_loss(
                     logits, targets, ignore_idx=self.ignore_token_idx, reduction="sum"
                 )
                 total_loss += loss.item()
-                total_tokens += mask.sum().item()
+                total_tokens += count_tokens(targets, self.ignore_token_idx)
         model.train()
         avg_loss = total_loss / total_tokens
         perplexity = math.exp(avg_loss)

@@ -208,3 +208,8 @@ def move_to_device(
     *tensors: torch.Tensor, device: torch.device
 ) -> tuple[torch.Tensor, ...]:
     return tuple(t.to(device) for t in tensors)
+
+
+def count_tokens(token_ids: torch.Tensor, pad_idx: int) -> int:
+    mask = token_ids != pad_idx
+    return mask.sum().item()

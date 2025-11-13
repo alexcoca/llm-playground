@@ -105,6 +105,7 @@ class TrainerState(SerializableConfig):
 
     global_step: int = 0
     num_epochs_trained: int = 0
+    tokens_seen: int = 0
     steps_current_epoch: int = 0
     best_val_loss: float = 0.0
     best_val_loss_steps: float = 0
@@ -119,6 +120,9 @@ class TrainerState(SerializableConfig):
     def increment_step(self):
         self.global_step += 1
         self.steps_current_epoch += 1
+
+    def increment_seen_tokens(self, n: int):
+        self.tokens_seen += n
 
     def maybe_update_best_loss(self, loss: float, split: Split):
         raise NotImplementedError

@@ -131,6 +131,7 @@ class Trainer:
             for step, (inputs, targets) in enumerate(dataloader):
                 inputs, targets = move_to_device(inputs, targets, device=self.device)
                 self.train_step(model, inputs, targets)
+                self.state.increment_seen_tokens(inputs.numel())
                 self.state.increment_step()
 
     def train_step(

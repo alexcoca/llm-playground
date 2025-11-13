@@ -2,9 +2,9 @@ defaults:
   - sampling: greedy
 
 num_epochs: 10
-save_steps: 100
-eval_steps: 100
-log_steps: 100
+save_steps: 85
+eval_steps: 10
+log_steps: 10
 ignore_token_index: -100
 ensure_determinism: False
 allow_ckpt_override: True
@@ -14,15 +14,6 @@ experiment_name: ???
 checkpoint_dir: ${root:models/${trainer.experiment_name}/${now:%Y-%m-%d_%H-%M-%S}_seed_${.seed}}
 device: 'mps'
 
-# generate text from model every sample_steps or every epoch
-# set to ~ to disable
-sample_steps: 'epoch'
-sample_contexts:
-  - "Every effort moves you"
 
 loggers:
   - _target_: playground.loggers.ConsoleLogger
-display_samples: True
-# if specified, samples will be saved here
-#  every 'sample_steps`
-samples_dir: ${create_dir:${trainer.checkpoint_dir}/samples}

@@ -88,7 +88,7 @@ class Trainer:
             eval_steps=trainer_config.eval_steps,
             log_steps=trainer_config.log_steps,
             num_train_steps=self.num_train_steps,
-            sample_steps=trainer_config.sample_steps,
+            sample_steps=trainer_config.sampling.sample_steps,
             epoch_steps=self.num_train_steps // self.num_epochs,
         )
         self.control = TrainerControl(state=self.state, config=control_config)
@@ -96,8 +96,8 @@ class Trainer:
         self.lr_scheduler = self.init_scheduler(self.optimiser, optimiser_config)
         self.ignore_token_idx = trainer_config.ignore_token_index
         self._sampling_config = trainer_config.sampling
-        self.samples_dir = trainer_config.samples_dir
-        self.display_samples = trainer_config.display_samples
+        self.display_samples = trainer_config.sampling.display_samples
+        self.samples_dir = trainer_config.sampling.samples_dir
         if self.samples_dir is not None:
             self.samples_dir = Path(trainer_config.samples_dir)
         self.loggers = instantiate(trainer_config.loggers) or []

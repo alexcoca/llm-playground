@@ -11,8 +11,10 @@ from omegaconf import DictConfig, OmegaConf
 from pydantic import BaseModel
 from torch import nn
 from torch.utils.data import Dataset
+from torchtyping import TensorType
 
 from playground.dataloader import get_train_dataloader
+from playground.losses import language_modelling_loss
 from playground.metadata import (
     FINAL_NORM,
     LAYER_NORM_PRE_ATT,
@@ -137,6 +139,7 @@ class Trainer:
         self.num_epochs = trainer_config.num_epochs
         self.optimiser = self._init_optimiser(self._model, optimiser_config.optimiser)
         self.lr_scheduler = self._init_scheduler(self.optimiser, optimiser_config)
+        self.ignore_token_idx = trainer_config.ignore_token_index
 
     @staticmethod
     def _init_optimiser(model: nn.Module, config: DictConfig) -> torch.optim.Optimizer:
@@ -181,18 +184,24 @@ class Trainer:
         loader_config = OmegaConf.to_container(
             self._dataloader_config.train, resolve=True
         )
-        dataloader = get_train_dataloader(self._train_dataset, **loader_config)
         model = self._model
+        dataloader = get_train_dataloader(self._train_dataset, **loader_config)
         for epoch in range(self.state.num_epochs_trained, self.num_epochs):
             for step, (inputs, targets) in enumerate(dataloader):
                 inputs, targets = prepare_tensor(inputs, targets, device=self.device)
-                self._train_step(model, inputs, targets)
+                self.train_step(model, inputs, targets)
                 self.state.increment_step()
 
-    def _train_step(
-        self, model: nn.Module, inputs: torch.Tensor, targets: torch.Tensor
-    ):
-        print(inputs.shape, targets.shape)
+    def train_step(
+        self, model: nn.Module, inputs: TensorType["B", "L", "D"], targets: ["B", "L"]
+    ) -> torch.Tensor:
+        self.optimiser.zero_grad()
+        logits = model(inputs)
+        loss = self.compute_loss(logits, targets, model=model)
+        loss.backward()
+        self.optimiser.step()
+        self.lr_scheduler.step()
+        return loss.item()
 
     def evaluate(self):
         pass
@@ -200,4 +209,13 @@ class Trainer:
     def predict(self):
         pass
 
-    def compute_loss(self, model: nn.Module, batch: torch.Tensor, **kwargs): ...
+    def compute_loss(
+        self,
+        outputs: TensorType["B", "L", "V"],
+        targets: TensorType["B", "L"],
+        **kwargs,
+    ):
+        ignore_idx = kwargs.get("ignore_idx", -100)
+        return language_modelling_loss(
+            next_token_logits=outputs, next_token_ids=targets, ignore_idx=ignore_idx
+        )

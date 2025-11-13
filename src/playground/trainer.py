@@ -1,14 +1,11 @@
-import json
 import logging
 from functools import cached_property
 from pathlib import Path
-from typing import Literal
 
 import tiktoken
 import torch
 from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
-from pydantic import BaseModel
 from torch import nn
 from torch.utils.data import Dataset
 from torchtyping import TensorType
@@ -22,12 +19,18 @@ from playground.metadata import (
     POS_EMBEDDING,
     TOK_EMBEDDING,
 )
-from playground.trainer_utils import ensure_determinism, set_seed
+from playground.trainer_utils import (
+    TrainerControl,
+    TrainerControlConfig,
+    TrainerState,
+    ensure_determinism,
+    move_to_device,
+    prepare_model,
+    set_seed,
+)
 
 logger = logging.getLogger(__name__)
 
-Split = Literal["train", "validation"]
-TRAINER_STATE_NAME = "trainer_state.json"
 NO_DECAY_PARAMS = [
     "bias",
     LAYER_NORM_PRE_FFN,
@@ -36,75 +39,6 @@ NO_DECAY_PARAMS = [
     TOK_EMBEDDING,
     POS_EMBEDDING,
 ]
-
-
-class TrainerState(BaseModel):
-
-    global_step: int = 0
-    num_epochs_trained: int = 0
-    steps_current_epoch: int = 0
-    best_val_loss: float = 0.0
-    best_val_loss_steps: float = 0
-    best_train_loss: float = 0.0
-    best_train_loss_steps: float = 0
-    seed: int | None = None
-
-    def new_epoch(self):
-        self.num_epochs_trained += 1
-        self.steps_current_epoch = 0
-
-    def increment_step(self):
-        self.global_step += 1
-        self.steps_current_epoch += 1
-
-    def maybe_update_best_loss(self, loss: float, split: Split):
-        raise NotImplementedError
-
-    @classmethod
-    def load_from_json(cls, input_dir: Path | str) -> "TrainerState":
-        """Loads trainer state from a JSON file, or returns a new state."""
-        if not isinstance(input_dir, Path):
-            input_dir = Path(input_dir)
-
-        filepath = input_dir / TRAINER_STATE_NAME
-
-        if not filepath.exists():
-            logger.warning(f"No state file found at {filepath}. Starting new state.")
-            return cls()
-
-        try:
-            json_data = filepath.read_text()
-            logger.info(f"Loading state from {filepath}")
-            return cls.model_validate_json(json_data)
-
-        except (json.JSONDecodeError, FileNotFoundError) as e:
-            logger.error(f"Error loading trainer state: {e}.")
-            raise e
-
-    def save_to_json(self, output_dir: Path | str):
-        """Saves the trainer state to a JSON file."""
-        if not isinstance(output_dir, Path):
-            output_dir = Path(output_dir)
-
-        output_dir.mkdir(parents=True, exist_ok=True)
-        filepath = output_dir / TRAINER_STATE_NAME
-
-        json_data = self.model_dump_json(indent=2)
-        filepath.write_text(json_data)
-
-        logger.info(f"Trainer state saved to {filepath}")
-
-
-def prepare_model(model: torch.nn.Module, device: torch.device) -> torch.nn.Module:
-    model.train()
-    model.to(device)
-    return model
-
-
-def prepare_tensor(
-    *tensors: torch.Tensor, device: torch.device
-) -> tuple[torch.Tensor, ...]:
-    return tuple(t.to(device) for t in tensors)
 
 
 class Trainer:
@@ -133,10 +67,17 @@ class Trainer:
         self._test_dataset = test_dataset
         self._checkpoint_dir = trainer_config.checkpoint_dir
         self._dataloader_config = data_loader_config
-        self.state = TrainerState(seed=seed)
-        self._save_steps = trainer_config.save_steps
-        self._eval_steps = trainer_config.eval_steps
         self.num_epochs = trainer_config.num_epochs
+        self.state = TrainerState(seed=seed)
+        control_config = TrainerControlConfig(
+            save_steps=trainer_config.save_steps,
+            eval_steps=trainer_config.eval_steps,
+            log_steps=trainer_config.log_steps,
+            num_train_steps=self.num_train_steps,
+            sample_steps=trainer_config.sample_steps,
+            epoch_steps=self.num_train_steps // self.num_epochs,
+        )
+        self.control = TrainerControl(state=self.state, config=control_config)
         self.optimiser = self._init_optimiser(self._model, optimiser_config.optimiser)
         self.lr_scheduler = self._init_scheduler(self.optimiser, optimiser_config)
         self.ignore_token_idx = trainer_config.ignore_token_index
@@ -188,7 +129,7 @@ class Trainer:
         dataloader = get_train_dataloader(self._train_dataset, **loader_config)
         for epoch in range(self.state.num_epochs_trained, self.num_epochs):
             for step, (inputs, targets) in enumerate(dataloader):
-                inputs, targets = prepare_tensor(inputs, targets, device=self.device)
+                inputs, targets = move_to_device(inputs, targets, device=self.device)
                 self.train_step(model, inputs, targets)
                 self.state.increment_step()
 

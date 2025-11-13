@@ -1,4 +1,4 @@
-num_epochs: 2
+num_epochs: 10
 save_steps: 100
 eval_steps: 100
 ensure_determinism: False
@@ -7,3 +7,9 @@ seed: 0
 experiment_name: ???
 checkpoint_dir: ${root:models/${trainer.experiment_name}/${now:%Y-%m-%d_%H-%M-%S}_seed_${.seed}}
 device: 'mps'
+
+# generate text from model every sample_steps or every epoch
+# set to ~ to disable
+sample_steps: 'epoch'
+sample_contexts:
+  - "Every effort moves you"

@@ -1,7 +1,7 @@
 defaults:
   - model: gpt2small_context_256
   - tokenizer: gpt2
-  - optimiser: adamw
+  - optimiser@optimiser: adamw
   - data_loader: the_verdict_pretrain
   - dataset: the_verdict_pretrain
   - trainer: pretrain_verdict

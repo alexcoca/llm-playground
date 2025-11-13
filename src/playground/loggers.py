@@ -20,6 +20,11 @@ class ConsoleLogger(Logger):
         for metric_key, metric_value in metric.items():
             logger.info(f"Step {step}: {metric_key}: {metric_value}")
 
+    def display_samples(self, samples: list[str], step: int):
+        logger.info(f"Samples at step {step}:")
+        for i, sample in enumerate(samples):
+            logger.info(f"  [{i}]: {sample}")
+
 
 # class WandbLogger(Logger):
 #     def __init__(self, project, name, config):

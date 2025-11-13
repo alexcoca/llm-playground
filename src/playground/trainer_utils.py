@@ -4,13 +4,17 @@ import os
 import random
 from enum import Enum
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
 import torch
 from pydantic import BaseModel, model_validator
 
 logger = logging.getLogger(__name__)
+
+
+class FinishedTraining(Exception):
+    pass
 
 
 def set_seed(seed: int | None):
@@ -57,6 +61,11 @@ class TrainerAction(str, Enum):
     LOG = "log"
     SAMPLE = "sample"
     STOP = "stop"
+
+
+class ActionResult(BaseModel):
+    action: TrainerAction
+    result: Any
 
 
 Split = Literal["train", "validation"]

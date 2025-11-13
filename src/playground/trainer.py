@@ -23,6 +23,8 @@ from playground.trainer_utils import (
     CHECKPOINT_TEMPLATE,
     TRAINER_CONTROLLER_CONFIG_NAME,
     TRAINER_STATE_NAME,
+    ActionResult,
+    FinishedTraining,
     TrainerAction,
     TrainerControl,
     TrainerControlConfig,
@@ -83,13 +85,17 @@ class Trainer:
             epoch_steps=self.num_train_steps // self.num_epochs,
         )
         self.control = TrainerControl(state=self.state, config=control_config)
-        self.optimiser = self._init_optimiser(self._model, optimiser_config.optimiser)
-        self.lr_scheduler = self._init_scheduler(self.optimiser, optimiser_config)
+        self.optimiser = self.init_optimiser(self._model, optimiser_config.optimiser)
+        self.lr_scheduler = self.init_scheduler(self.optimiser, optimiser_config)
         self.ignore_token_idx = trainer_config.ignore_token_index
+        self.samples_dir = trainer_config.samples_dir
+        self.display_samples = trainer_config.display_samples
+        if self.samples_dir is not None:
+            self.samples_dir = Path(trainer_config.samples_dir)
         self.loggers = instantiate(trainer_config.loggers) or []
 
     @staticmethod
-    def _init_optimiser(model: nn.Module, config: DictConfig) -> torch.optim.Optimizer:
+    def init_optimiser(model: nn.Module, config: DictConfig) -> torch.optim.Optimizer:
         logger.info(f"Weight decay will not be applied to {NO_DECAY_PARAMS}")
         no_weight_decay, rest = [], []
         for name, param in model.named_parameters():
@@ -104,7 +110,7 @@ class Trainer:
         ]
         return instantiate(config, params=param_groups)
 
-    def _init_scheduler(self, optimiser: torch.optim.Optimizer, config: DictConfig):
+    def init_scheduler(self, optimiser: torch.optim.Optimizer, config: DictConfig):
         return instantiate(
             config.scheduler,
             num_warmup_steps=self.num_train_steps * config.warmup_perc,
@@ -133,28 +139,68 @@ class Trainer:
         )
         model = self._model
         dataloader = get_train_dataloader(self._train_dataset, **loader_config)
-        for epoch in range(self.state.num_epochs_trained, self.num_epochs):
-            for step, (inputs, targets) in enumerate(dataloader):
-                inputs, targets = move_to_device(inputs, targets, device=self.device)
-                self.train_step(model, inputs, targets)
-                # TODO: ACCOUNT FOR PADDING LATER
-                self.state.increment_seen_tokens(inputs.numel())
-                self.state.increment_step()
+        try:
+            for epoch in range(self.state.num_epochs_trained, self.num_epochs):
+                for step, (inputs, targets) in enumerate(dataloader):
+                    inputs, targets = move_to_device(
+                        inputs, targets, device=self.device
+                    )
+                    loss = self.train_step(model, inputs, targets)
+                    # TODO: ACCOUNT FOR PADDING LATER
+                    self.state.increment_seen_tokens(inputs.numel())
+                    self.state.increment_step()
+                    actions = self.control.determine_actions()
+                    results = self.execute_actions(actions, metrics={"loss": loss})
+                    self.process_action_results(results)
+        except FinishedTraining:
+            raise NotImplementedError
 
-    def execute_actions(self, actions: list[TrainerAction], **kwargs) -> bool:
+    def execute_actions(
+        self, actions: list[TrainerAction], **kwargs
+    ) -> list[ActionResult]:
+        results = []
+        metrics = kwargs.get("metrics", {})
         for action in actions:
             if action == TrainerAction.SAVE:
                 self.save(**kwargs)
             elif action == TrainerAction.EVALUATE:
-                self.evaluate(**kwargs)
+                eval_metrics = self.evaluate(**kwargs)
+                # TODO: ASSERT DISTINCT KEYS HERE?
+                metrics |= eval_metrics
             elif action == TrainerAction.LOG:
-                self.log(**kwargs)
+                self.log(metrics=metrics, **kwargs)
             elif action == TrainerAction.SAMPLE:
-                self.sample(**kwargs)
+                results.append(
+                    ActionResult(
+                        action=TrainerAction.SAMPLE, result=self.sample(**kwargs)
+                    )
+                )
             elif action == TrainerAction.STOP:
-                raise NotImplementedError
+                results.append(
+                    ActionResult(
+                        action=TrainerAction.STOP,
+                        result=True,
+                    )
+                )
             else:
-                raise ValueError(f"Unknown action : {action}")
+                raise ValueError(f"Unknown Trainer action : {action}")
+
+        return results
+
+    def process_action_results(self, results: list[ActionResult | None]):
+        for result in (r for r in results if r is not None):
+            if result.action == TrainerAction.SAMPLE:
+                if self.display_samples:
+                    for logger_ in self.loggers:
+                        logger_.display_samples(
+                            result.data, step=self.state.global_step
+                        )
+                if (sample_dir := self.samples_dir) is not None:
+                    fpath = sample_dir / f"samples_step_{self.state.global_step}.txt"
+                    fpath.write_text("\n\n".join(result.result))
+
+            elif result.action == TrainerAction.STOP:
+                raise FinishedTraining("Training completed")
 
     def train_step(
         self, model: nn.Module, inputs: TensorType["B", "L", "D"], targets: ["B", "L"]

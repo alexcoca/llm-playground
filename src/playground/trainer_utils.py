@@ -1,6 +1,7 @@
 import logging
 import os
 import random
+from enum import Enum
 
 import numpy as np
 import torch
@@ -33,3 +34,22 @@ def ensure_determinism(seed: int):
     # Enable CUDNN deterministic mode
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+
+
+class TrainerAction(str, Enum):
+    """Actions that can be executed during training."""
+
+    # Lifecycle events (always happen)
+    TRAIN_BEGIN = "train_begin"
+    TRAIN_END = "train_end"
+    EPOCH_BEGIN = "epoch_begin"
+    EPOCH_END = "epoch_end"
+    STEP_BEGIN = "step_begin"
+    STEP_END = "step_end"
+
+    # Conditional actions (triggered by TrainerControl)
+    SAVE = "save"
+    EVALUATE = "evaluate"
+    LOG = "log"
+    SAMPLE = "sample"
+    STOP = "stop"

@@ -6,6 +6,5 @@ train:
 validation:
   batch_size: 2
   num_workers: 0
-  drop_last: False
 
 test: ~

@@ -101,7 +101,7 @@ class Trainer:
         self.display_samples = trainer_config.sampling.display_samples
         self.samples_dir = trainer_config.sampling.samples_dir
         if self.samples_dir is not None:
-            self.samples_dir = Path(trainer_config.samples_dir)
+            self.samples_dir = Path(self.samples_dir)
         self.loggers = instantiate(trainer_config.loggers) or []
 
     @staticmethod
@@ -192,7 +192,7 @@ class Trainer:
         self, actions: list[TrainerAction], **kwargs
     ) -> list[ActionResult]:
         results = []
-        metrics = kwargs.get("metrics", {})
+        metrics = kwargs.pop("metrics", {})
         for action in actions:
             if action == TrainerAction.SAVE:
                 self.save(**kwargs)
@@ -225,7 +225,7 @@ class Trainer:
                 if self.display_samples:
                     for logger_ in self.loggers:
                         logger_.display_samples(
-                            result.data, step=self.state.global_step
+                            result.result, step=self.state.global_step
                         )
                 if (sample_dir := self.samples_dir) is not None:
                     fpath = sample_dir / f"samples_step_{self.state.global_step}.txt"

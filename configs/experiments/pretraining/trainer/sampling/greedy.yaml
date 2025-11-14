@@ -1,6 +1,6 @@
 prompts:
   - "Every effort moves you"
-  - "The quick brown"
+  - "The quick brown fox"
   - "Once upon a time"
 
 max_new_tokens: 50

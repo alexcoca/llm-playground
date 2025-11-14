@@ -212,6 +212,35 @@ def prepare_model(model: torch.nn.Module, device: torch.device) -> torch.nn.Modu
     return model
 
 
+def resolve_device(device_spec: str | torch.device) -> torch.device:
+    """Return a valid torch.device, falling back to CPU when necessary."""
+
+    if isinstance(device_spec, torch.device):
+        device = device_spec
+    else:
+        spec_lower = device_spec.lower()
+        if spec_lower == "auto":
+            if torch.cuda.is_available():
+                return torch.device("cuda")
+            mps_backend = getattr(torch.backends, "mps", None)
+            if mps_backend is not None and torch.backends.mps.is_available():
+                return torch.device("mps")
+            return torch.device("cpu")
+        device = torch.device(spec_lower)
+
+    if device.type == "cuda" and not torch.cuda.is_available():
+        logger.warning("CUDA requested but not available, falling back to CPU")
+        return torch.device("cpu")
+
+    if device.type == "mps":
+        mps_backend = getattr(torch.backends, "mps", None)
+        if mps_backend is None or not torch.backends.mps.is_available():
+            logger.warning("MPS requested but not available, falling back to CPU")
+            return torch.device("cpu")
+
+    return device
+
+
 def move_to_device(
     *tensors: torch.Tensor, device: torch.device
 ) -> tuple[torch.Tensor, ...]:

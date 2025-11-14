@@ -12,7 +12,7 @@ seed: 123
 
 experiment_name: ???
 checkpoint_dir: ${root:models/${trainer.experiment_name}/${now:%Y-%m-%d_%H-%M-%S}_seed_${.seed}}
-device: 'mps'
+device: 'auto'
 
 
 loggers:

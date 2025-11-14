@@ -36,6 +36,7 @@ from playground.trainer_utils import (
     ensure_determinism,
     move_to_device,
     prepare_model,
+    resolve_device,
     set_seed,
 )
 
@@ -73,7 +74,7 @@ class Trainer:
             ensure_determinism(seed)
         else:
             set_seed(seed)
-        self.device = torch.device(trainer_config.device)
+        self.device = resolve_device(trainer_config.device)
         self._model = prepare_model(model, self.device)
         self._checkpoint_dir = Path(trainer_config.checkpoint_dir)
         self._allow_ckpt_override = trainer_config.allow_ckpt_override

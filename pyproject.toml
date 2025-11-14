@@ -40,6 +40,7 @@ ignore-words-list = "Dout,nd"
 "src/playground/inference_utils.py" = ["F821"]
 "src/playground/layers_optimised.py" = ["F821"]
 "src/playground/losses.py" = ["F821"]
+"src/playground/logit_processors.py" = ["F821"]
 "src/playground/transformer.py" = ["F821"]
 "src/playground/transformer_utils.py" = ["F821"]
 "src/playground/trainer.py" = ["F821"]

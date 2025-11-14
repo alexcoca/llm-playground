@@ -167,9 +167,9 @@ class TrainerControl:
         self.num_train_steps = config.num_train_steps
         self.sample_steps = config.sample_steps
         self._control_steps = (
-            ("should_log", TrainerAction.LOG),
             ("should_save", TrainerAction.SAVE),
             ("should_evaluate", TrainerAction.EVALUATE),
+            ("should_log", TrainerAction.LOG),
             ("should_sample", TrainerAction.SAMPLE),
             ("should_stop", TrainerAction.STOP),
         )

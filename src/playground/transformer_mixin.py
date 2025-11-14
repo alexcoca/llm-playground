@@ -12,7 +12,7 @@ def load_model_config(model_name: str) -> DictConfig:
     #  AT CONFIG, THEN UPDATE TO RECURSE THROUGH THE HIERARCHY
     config_dir = resources.files(f"{PACKAGE_NAME}.config")
     try:
-        cfg = OmegaConf.load(config_dir / f"{model_name}.yaml")
+        cfg = OmegaConf.load(config_dir / "models" / f"{model_name}.yaml")
     except FileNotFoundError:
         raise FileNotFoundError(f"No config matched {model_name}!")
     return cfg

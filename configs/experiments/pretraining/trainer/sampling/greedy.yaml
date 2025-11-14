@@ -1,0 +1,14 @@
+prompts:
+  - "Every effort moves you"
+  - "The quick brown fox"
+  - "Once upon a time"
+
+max_new_tokens: 50
+
+# generate text from model every sample_steps or every epoch
+# set to ~ to disable
+sample_steps: 'epoch'
+display_samples: True
+# if specified, samples will be saved here
+#  every 'sample_steps`
+samples_dir: ${create_dir:${trainer.checkpoint_dir}/samples}

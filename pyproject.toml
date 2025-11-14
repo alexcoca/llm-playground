@@ -12,6 +12,7 @@ dependencies = [
   "scikit-learn>=1.7,<2",
   "hydra-core>=1.3,<2",
   "transformers>=4.57,<5",
+  "pydantic>=2.12.4,<3"
 ]
 
 [dependency-groups]
@@ -25,15 +26,23 @@ dev = [
 requires = ["hatchling>=1.18"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.wheel]
+packages = ["src/playground"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/playground", "pyproject.toml", "README.md"]
+
 [tool.codespell]
 # A comma-separated list of words to ignore.
-ignore-words-list = "Dout"
+ignore-words-list = "Dout,nd"
 
 [tool.ruff.lint.per-file-ignores]
 "src/playground/inference_utils.py" = ["F821"]
 "src/playground/layers_optimised.py" = ["F821"]
+"src/playground/losses.py" = ["F821"]
 "src/playground/transformer.py" = ["F821"]
 "src/playground/transformer_utils.py" = ["F821"]
+"src/playground/trainer.py" = ["F821"]
 
 [tool.isort]
 profile = "black"

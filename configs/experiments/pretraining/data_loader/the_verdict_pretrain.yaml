@@ -1,0 +1,10 @@
+train:
+  batch_size: 2
+  num_workers: 0
+  drop_last: True
+
+validation:
+  batch_size: 2
+  num_workers: 0
+
+test: ~

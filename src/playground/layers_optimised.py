@@ -71,7 +71,6 @@ class MultiHeadAttentionOptimised(nn.Module):
         )
         # (B, H, L, d_head) -> ... -> (B, L, d_out)
         context = attn.transpose(1, 2).flatten(2)
-        print(f"forward {context.sum(dim=-1)=}")
         return self.W_out(context)
 
     def forward_cached(
@@ -117,7 +116,6 @@ class MultiHeadAttentionOptimised(nn.Module):
             attn_mask=attn_mask,
         )
         context = attn.transpose(1, 2).flatten(2)
-        print(f"forward_cached{context.sum(dim=-1)=}")
 
         return self.W_out(context)
 
@@ -192,6 +190,7 @@ class TransformerBlock(nn.Module):
                 kv_cache=kv_cache,
                 cache_pos=cache_pos,
                 cache_key_mask=cache_key_mask,
+                query_mask=query_mask,
             )
         )
         res_stream = res_stream + attention_output

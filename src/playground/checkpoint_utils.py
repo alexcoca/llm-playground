@@ -3,22 +3,23 @@
 import logging
 import re
 from typing import Dict
+
 import torch
 
-# symbols used in our Transformers implementation
-TOK_EMBEDDING = "tok_embedding"
-POS_EMBEDDING = "pos_embedding"
-BLOCKS = "blocks"
-LAYER_NORM_PRE_ATT = "layer_norm_pre_att"
-ATTENTION = "attention"
-W_QKV = "W_qkv"
-W_OUT = "W_out"
-LAYER_NORM_PRE_FFN = "layer_norm_pre_ffn"
-FFN = "ffn"
-FFN_FC = "layers.0"  # First linear in FFN sequential
-FFN_PROJ = "layers.2"  # Second linear in FFN sequential
-FINAL_NORM = "final_norm"
-LM_HEAD = "lm_head"
+from playground.metadata import (
+    ATTENTION,
+    BLOCKS,
+    FFN,
+    FFN_FC,
+    FFN_PROJ,
+    FINAL_NORM,
+    LAYER_NORM_PRE_ATT,
+    LAYER_NORM_PRE_FFN,
+    POS_EMBEDDING,
+    TOK_EMBEDDING,
+    W_OUT,
+    W_QKV,
+)
 
 # mapping from local configs to huggingface repo names
 CONFIG_TO_HF_REPO = {

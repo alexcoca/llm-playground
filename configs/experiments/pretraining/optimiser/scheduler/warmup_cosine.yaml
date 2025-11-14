@@ -1,0 +1,12 @@
+#Create a schedule with a learning rate that decreases following the values of the
+#  cosine function between the initial lr set in the optimizer to min_lr, after a
+# warmup period during which it increases linearly between 0 and the initial lr set
+# in the optimizer.
+_target_: transformers.get_cosine_with_min_lr_schedule_with_warmup
+optimizer: ???
+num_warmup_steps: ???
+num_training_steps: ???
+num_cycles: 0.5
+# minimum learning rate as a ratio of
+# the initial learning rate.
+min_lr_rate: 0.1

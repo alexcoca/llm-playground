@@ -1,0 +1,9 @@
+input_dir: ${root:data/raw}
+out_dir: ${root:data/processed}
+tokenizer:
+  _target_: tiktoken.get_encoding
+  _args_:
+    - 'gpt2'
+# fraction of data allocated to train set
+# from each shard
+train_ratio: 0.9

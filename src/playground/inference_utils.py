@@ -1,9 +1,12 @@
-from typing import NamedTuple
+from typing import Iterable, Literal, NamedTuple
 
 import torch
 from torchtyping import TensorType
 
+from playground.logit_processors import LogitsProcessor, apply_logits_processors
+
 Logits = TensorType["B", "L", "V"]
+NextTokenLogits = TensorType["B", "V"]
 NextTokenId = TensorType["B", 1]
 
 
@@ -17,16 +20,43 @@ class KVCache(NamedTuple):
     values: TensorType["B", "H", "T", "Dh"]
 
 
-def get_next_token_ids(
-    logits: Logits, positions: TensorType["B"] | None = None
-) -> NextTokenId:
+def prepare_logits(
+    logits: Logits,
+    positions: TensorType["B"] | None,
+    processors: Iterable[LogitsProcessor] | None = None,
+) -> NextTokenLogits:
+    """Slices the sequence logits tensor, selects the logits,
+    for the next token and pre-processes the logits with
+    user-defined transformations."""
+    logits = apply_logits_processors(logits, processors)
+
     if positions is not None:
+        positions = positions.to(device=logits.device, dtype=torch.long)
         idx = torch.arange(logits.shape[0], device=logits.device)
         logits = logits[idx, positions, :]
     else:
         logits = logits[:, -1, :]
-    probas = torch.softmax(logits, dim=-1)
-    return torch.argmax(probas, dim=-1, keepdim=True)
+
+    return logits
+
+
+def get_next_token_ids(
+    logits: Logits,
+    positions: TensorType["B"] | None = None,
+    processors: Iterable[LogitsProcessor] | None = None,
+    decoding_type: Literal["greedy", "sample"] = "greedy",
+) -> NextTokenId:
+
+    this_step_logits = prepare_logits(logits, positions, processors)
+
+    if decoding_type == "greedy":
+        return torch.argmax(this_step_logits, dim=-1, keepdim=True)
+
+    if decoding_type == "sample":
+        probas = torch.softmax(this_step_logits, dim=-1)
+        return torch.multinomial(probas, num_samples=1)
+
+    raise ValueError(f"Unknown decoding type: {decoding_type}")
 
 
 def should_stop_generation(

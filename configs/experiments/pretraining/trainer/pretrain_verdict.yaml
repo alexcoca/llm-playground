@@ -6,9 +6,9 @@ save_steps: 85
 eval_steps: 10
 log_steps: 10
 ignore_token_index: -100
-ensure_determinism: False
+ensure_determinism: True
 allow_ckpt_override: True
-seed: 0
+seed: 123
 
 experiment_name: ???
 checkpoint_dir: ${root:models/${trainer.experiment_name}/${now:%Y-%m-%d_%H-%M-%S}_seed_${.seed}}

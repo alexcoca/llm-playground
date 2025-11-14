@@ -123,7 +123,7 @@ class Trainer:
     def init_scheduler(self, optimiser: torch.optim.Optimizer, config: DictConfig):
         return instantiate(
             config.scheduler,
-            num_warmup_steps=self.num_train_steps * config.warmup_perc,
+            num_warmup_steps=int(self.num_train_steps * config.warmup_perc),
             num_training_steps=self.num_train_steps,
             optimizer=optimiser,
         )

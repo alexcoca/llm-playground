@@ -179,6 +179,7 @@ class Trainer:
                         actions, metrics={f"{TRAINING_METRIC_KEY}/loss": loss}
                     )
                     self.process_action_results(results)
+                self.state.new_epoch()
         except FinishedTraining:
             logger.info("Training finished")
         return TrainingResult(

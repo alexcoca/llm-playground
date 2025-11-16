@@ -6,13 +6,6 @@ dataset + dataloader utilities, and a transparent PyTorch training loop that
 prioritizes checkpointing + resuming so you can iterate on research ideas
 without re-building the same scaffolding.
 
-## Why this exists
-
-I wanted a compact codebase that exposes the entire large language model
-pre-training pipeline—from raw `.txt` shards to a GPU-efficient model generate
-call—while staying hackable. Everything is pure PyTorch/Hydra with very few
-abstractions so it is easy to instrument, profile, and extend.
-
 ## Highlights
 
 - **Config-first experiments.** Hydra drives every stage (preprocessing,

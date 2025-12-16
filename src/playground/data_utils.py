@@ -41,7 +41,7 @@ def train_val_split(
     tokenizer: Encoding,
     train_ratio: float = 0.9,
 ) -> tuple[str, str]:
-
+    """Split text into a training and validation portion."""
     encoded = tokenizer.encode(text)
     split_idx = int(len(encoded) * train_ratio)
     train_tok, val_tok = encoded[:split_idx], encoded[split_idx:]

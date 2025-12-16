@@ -1,14 +1,17 @@
 import math
+
+import pytest
 import torch
 import torch.nn.functional as F
-import pytest
 
 from playground.layers_optimised import MultiHeadAttentionOptimised as MHA
 
 
-def make_model(d_in=32, d_out=64, heads=8, dropout=0.0, device="cpu", eval_mode=True):
+def make_model(
+    d_in=32, d_out=64, heads=8, dropout=0.0, device="cpu", dtype=None, eval_mode=True
+):
     m = MHA(d_in=d_in, d_out=d_out, num_heads=heads, dropout=dropout, qkv_bias=True).to(
-        device
+        device=device, dtype=dtype
     )
     if eval_mode:
         m.eval()
@@ -145,7 +148,9 @@ def test_cuda_bfloat16_with_padding_smoke():
     x = torch.randn(B, L, Din, device=device, dtype=torch.bfloat16)
     attn_mask = right_pad_mask([10, 7], L, device)
 
-    m = make_model(Din, Dout, H, dropout=0.0, device=device).eval()
+    m = make_model(
+        Din, Dout, H, dropout=0.0, device=device, dtype=torch.bfloat16
+    ).eval()
     y = m(x, attention_mask=attn_mask)
     assert y.shape == (B, L, Dout)
     assert y.dtype == x.dtype

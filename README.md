@@ -56,7 +56,7 @@ without re-building the same scaffolding.
 - Python 3.11+
 - A CUDA-capable GPU (trainer auto-selects `cuda` when available but also works
   on CPU for experiments)
-- `uv` or `pip` for dependency management
+- `uv` for dependency management
 
 ### Installation
 
@@ -72,13 +72,13 @@ source .venv/bin/activate
 uv pip install -e .
 ```
 
-> 💡 Prefer pip? Replace the last command with
-> `pip install -e .[dev]` if you also want linting/testing extras.
+> 💡 If you wish to contribute, use instead 
+> `uv pip install -e ".[dev]"` which will also install `pytest` and `pre-commit`.
 
 ### Running the tests
 
-The repository currently ships with a fused multi-head attention test. Run the
-whole suite with:
+The repository currently ships with a fused multi-head attention test. If you installed with the
+`dev` option you can run the whole suite with:
 
 ```bash
 pytest
